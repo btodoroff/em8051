@@ -2,8 +2,38 @@ use std::sync::{mpsc,Arc,Mutex};
 use std::thread;
 use std::time::Duration;
 
+
 mod em8051 {
     use std::sync::{Arc,Mutex,mpsc};
+    use std::ops::{Index,IndexMut};
+    struct SfrData {
+        address: u16,
+        por_value: u8
+    }
+
+    enum SfrAddr {
+        ACC = 0xE0,
+        B = 0xF0,
+        PSW = 0xD0,
+        SP = 0x81,
+        DPL = 0x82,
+        DPH = 0x83,
+        P0 = 0x80,
+        P1 = 0x90,
+        P2 = 0xA0,
+        P3 = 0xB0,
+        IP = 0xB8,
+        IE = 0xA8,
+        TMOD = 0x89,
+        TCON = 0x88,
+        TH0 = 0x8C,
+        TL0 = 0x8A,
+        TH1 = 0x8D,
+        TL1 = 0x8B,
+        SCON = 0x98,
+        SBUF = 0x99,
+        PCON = 0x87,
+    }
 
     pub enum ControlMsg {
         Halt,
@@ -13,15 +43,43 @@ mod em8051 {
         ContinueFor(u64),
     }
 
+    struct InternalMemory([u8;256]);
+    impl Index<SfrAddr> for InternalMemory {
+        type Output = u8;
+        fn index(&self, sfr: SfrAddr) -> &Self::Output {
+            match sfr {
+                SfrAddr::B => &self.0[0x02],
+                _ => &self.0[0x02],
+            }
+        }
+    }
+    impl IndexMut<SfrAddr> for InternalMemory {
+        fn index_mut(&mut self, sfr: SfrAddr) -> &mut Self::Output {
+            match sfr {
+                SfrAddr::B => &mut self.0[0x02],
+                _ => &mut self.0[0xff],
+            }
+        }
+    }
+
     pub struct State {
         pub run: bool,
         cpu_regfile: [u8; 16],
         pgm_memory: [u8; 16*1024],
         data_memory: [u8; 16*1024],
-        sfr_space: [u8; 128],
+        int_memory: InternalMemory, // [u8; 256],
         pub clock_cycle: u64,
         break_clock_cycle: u64,
     }
+  /*  impl Index<SfrAddr> for State::int_memory {
+        type Output = u8;
+        fn index(&self, sfr: SfrAddr) -> &Self::Output {
+            match sfr {
+                SfrAddr::B => &self[0x02],
+                _ => &self[0x00]
+            }
+        }
+    } */
 
     pub fn new() -> Arc<Mutex<State>> {
         let state = Arc::new(Mutex::new(State {
@@ -29,7 +87,7 @@ mod em8051 {
             cpu_regfile: [0; 16],
             pgm_memory: [0; 16*1024],
             data_memory: [0; 16*1024],
-            sfr_space: [0; 128],
+            int_memory: InternalMemory([0; 256]),
             clock_cycle: 0,
             break_clock_cycle: u64::MAX,
         }));
@@ -74,6 +132,7 @@ mod em8051 {
                 let mut state = state_mutex.lock().unwrap();
                 tick(&mut state);
 
+                //Check clock cycle breakpoint
                 if state.clock_cycle >= state.break_clock_cycle {
                     state.run = false;
                     state.break_clock_cycle = u64::MAX;
@@ -89,9 +148,16 @@ mod em8051 {
     }
 
     fn reset (state: &mut State) {
+        state.run = false;
         for i in 0..128 {
-            state.sfr_space[i]=0;
+            state.int_memory.0[i]=0;
         }
+        state.int_memory[SfrAddr::SP] = 0b00000111;
+        state.int_memory[SfrAddr::P0] = 0b11111111;
+        state.int_memory[SfrAddr::P1] = 0b11111111;
+        state.int_memory[SfrAddr::P2] = 0b11111111;
+        state.int_memory[SfrAddr::P3] = 0b11111111;
+        state.clock_cycle = 0;
     }
 
 }
