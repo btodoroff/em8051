@@ -43,12 +43,14 @@ mod em8051 {
         ContinueFor(u64),
     }
 
+    #[derive(Debug)]
     struct InternalMemory([u8;256]);
     impl Index<SfrAddr> for InternalMemory {
         type Output = u8;
         fn index(&self, sfr: SfrAddr) -> &Self::Output {
             match sfr {
-                SfrAddr::B => &self.0[0x02],
+                SfrAddr::B => &self.0[0xF0],
+                SfrAddr::P0 => &self.0[0x80],
                 _ => &self.0[0x02],
             }
         }
@@ -56,12 +58,14 @@ mod em8051 {
     impl IndexMut<SfrAddr> for InternalMemory {
         fn index_mut(&mut self, sfr: SfrAddr) -> &mut Self::Output {
             match sfr {
-                SfrAddr::B => &mut self.0[0x02],
+                SfrAddr::B => &mut self.0[0xF0],
+                SfrAddr::P0 => &mut self.0[0x80],
                 _ => &mut self.0[0xff],
             }
         }
     }
 
+    #[derive(Debug)]
     pub struct State {
         pub run: bool,
         cpu_regfile: [u8; 16],
@@ -173,4 +177,5 @@ fn main() {
     println!("A");
     while state_mutex.lock().unwrap().clock_cycle < 10 {thread::sleep(Duration::from_millis(1));}
     println!("{}", state_mutex.lock().unwrap().clock_cycle);
+    println!("{:?}", state_mutex.lock().unwrap());
 }
