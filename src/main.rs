@@ -49,47 +49,52 @@ mod em8051 {
         type Output = u8;
         fn index(&self, sfr: SfrAddr) -> &Self::Output {
             &self.0[sfr as usize]
-            /*match sfr {
-                SfrAddr::B => &self.0[0xF0],
-                SfrAddr::P0 => &self.0[0x80],
-                _ => &self.0[0x02],
-            }*/
         }
     }
     impl IndexMut<SfrAddr> for InternalMemory {
         fn index_mut(&mut self, sfr: SfrAddr) -> &mut Self::Output {
             &mut self.0[sfr as usize]
-            //match sfr {
-                //SfrAddr::B => &mut self.0[0xF0],
-                //SfrAddr::P0 => &mut self.0[0x80],
-                //other => &mut self.0[other as usize],
-           //}
+        }
+    }
+    impl Index<u16> for InternalMemory {
+        type Output = u8;
+        fn index(&self, addr: u16) -> &Self::Output {
+            &self.0[addr as usize]
+        }
+    }
+    impl IndexMut<u16> for InternalMemory {
+        fn index_mut(&mut self, addr: u16) -> &mut Self::Output {
+            &mut self.0[addr as usize]
+        }
+    }
+    impl Index<u8> for InternalMemory {
+        type Output = u8;
+        fn index(&self, addr: u8) -> &Self::Output {
+            &self.0[addr as usize]
+        }
+    }
+    impl IndexMut<u8> for InternalMemory {
+        fn index_mut(&mut self, addr: u8) -> &mut Self::Output {
+            &mut self.0[addr as usize]
         }
     }
 
     #[derive(Debug)]
     pub struct State {
         pub run: bool,
-        cpu_regfile: [u8; 16],
-        pgm_memory: [u8; 16*1024],
+        pub pc: u16,
+        pub cpu_regfile: [u8; 16],
+        pub pgm_memory: [u8; 16*1024],
         data_memory: [u8; 16*1024],
         int_memory: InternalMemory, // [u8; 256],
         pub clock_cycle: u64,
         break_clock_cycle: u64,
     }
-  /*  impl Index<SfrAddr> for State::int_memory {
-        type Output = u8;
-        fn index(&self, sfr: SfrAddr) -> &Self::Output {
-            match sfr {
-                SfrAddr::B => &self[0x02],
-                _ => &self[0x00]
-            }
-        }
-    } */
 
     pub fn new() -> Arc<Mutex<State>> {
         let state = Arc::new(Mutex::new(State {
             run: false,
+            pc: 0,
             cpu_regfile: [0; 16],
             pgm_memory: [0; 16*1024],
             data_memory: [0; 16*1024],
@@ -149,12 +154,34 @@ mod em8051 {
     }
 
     fn tick (state: &mut State) {
+        let instruction:u8 = state.pgm_memory[state.pc as usize];
+
+        if (instruction & 0b00011111)==0b00010001 { // ACALL addr11
+            state.pc+=2;
+            let sp_value = state.int_memory[SfrAddr::SP];
+            state.int_memory[SfrAddr::SP] += 1;
+            state.int_memory[sp_value+1]=(state.pc & 0x00ff) as u8;
+            state.int_memory[SfrAddr::SP] += 1;
+            state.int_memory[sp_value+2]=(state.pc >> 8) as u8;
+            state.pc = ((instruction & 0b11100000) as u16) << 8;
+            state.pc += state.pgm_memory[(state.pc-1) as usize] as u16;
+        } else
+        if (instruction & 0b11111000)==0b00101000 { // ADD A,Rn
+            state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0b00000111) as usize] as u8;
+            state.pc+=1;
+        } else
+        if instruction == 0b00100101 {
+            state.int_memory[SfrAddr::ACC] += state.int_memory[state.int_memory[state.pc]];
+            state.pc += 2;
+        } else
+        {}
         state.clock_cycle += 1;
         println!("Tick: {}",state.clock_cycle);
     }
 
     fn reset (state: &mut State) {
         state.run = false;
+        state.pc = 0;
         for i in 0..128 {
             state.int_memory.0[i]=0;
         }
