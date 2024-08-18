@@ -1,4 +1,5 @@
-use std::sync::{mpsc,Arc,Mutex};
+
+use std::sync::{mpsc,Arc};
 use std::thread;
 use std::time::Duration;
 
@@ -6,10 +7,7 @@ use std::time::Duration;
 mod em8051 {
     use std::sync::{Arc,Mutex,mpsc};
     use std::ops::{Index,IndexMut};
-    struct SfrData {
-        address: u16,
-        por_value: u8
-    }
+    use std::fmt;
 
     enum SfrAddr {
         ACC = 0xE0,
@@ -91,6 +89,16 @@ mod em8051 {
         break_clock_cycle: u64,
     }
 
+    // Similarly, implement `Display` for `Point2D`.
+    impl fmt::Display for State {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            // Customize so only `x` and `y` are denoted.
+	    write!(f, "CPU State\n").unwrap();
+	    write!(f, "  run: {} @ PC:{}\n", self.run, self.pc).unwrap();
+	    write!(f, "  {} cycles w/break at {}", self.clock_cycle, self.break_clock_cycle)
+	}
+    }
+
     pub fn new() -> Arc<Mutex<State>> {
         let state = Arc::new(Mutex::new(State {
             run: false,
@@ -170,7 +178,7 @@ mod em8051 {
             state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0b00000111) as usize] as u8;
             state.pc+=1;
         } else
-        if instruction == 0b00100101 {
+        if instruction == 0b00100101 { // ADD A,direct
             state.int_memory[SfrAddr::ACC] += state.int_memory[state.int_memory[state.pc]];
             state.pc += 2;
         } else
@@ -206,5 +214,5 @@ fn main() {
     println!("A");
     while state_mutex.lock().unwrap().clock_cycle < 10 {thread::sleep(Duration::from_millis(1));}
     println!("{}", state_mutex.lock().unwrap().clock_cycle);
-    println!("{:?}", state_mutex.lock().unwrap());
+    println!("{:}", state_mutex.lock().unwrap());
 }
