@@ -164,7 +164,10 @@ mod em8051 {
     fn tick (state: &mut State) {
         let instruction:u8 = state.pgm_memory[state.pc as usize];
 
-        if (instruction & 0b00011111)==0b00010001 { // ACALL addr11
+        if instruction == 0x00 { // NOP
+	    state.pc+=1;
+	} else
+	if (instruction & 0b00011111)==0b00010001 { // ACALL addr11
             state.pc+=2;
             let sp_value = state.int_memory[SfrAddr::SP];
             state.int_memory[SfrAddr::SP] += 1;
@@ -182,7 +185,11 @@ mod em8051 {
             state.int_memory[SfrAddr::ACC] += state.int_memory[state.int_memory[state.pc]];
             state.pc += 2;
         } else
-        {}
+	    if (instruction & 0b11111110) == 0b00100110 { // ADD A,@Ri
+		state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0x00000001) as usize] as u8;
+		state.pc += 1;
+	} else
+        {};
         state.clock_cycle += 1;
         println!("Tick: {}",state.clock_cycle);
     }
