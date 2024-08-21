@@ -89,6 +89,23 @@ mod em8051 {
         break_clock_cycle: u64,
     }
 
+    impl State {
+	fn carry(&self) -> u8 {
+	    if (self.int_memory[SfrAddr::PSW] & 0b10000000) != 0 {
+		1
+	    } else {
+		0
+	    }
+	}
+	fn aux_carry(&self) -> u8 {
+	    if (self.int_memory[SfrAddr::PSW] & 0b01000000) != 0 {
+		1
+	    } else {
+		0
+	    }
+	}
+    }
+
     // Similarly, implement `Display` for `Point2D`.
     impl fmt::Display for State {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -177,18 +194,38 @@ mod em8051 {
             state.pc = ((instruction & 0b11100000) as u16) << 8;
             state.pc += state.pgm_memory[(state.pc-1) as usize] as u16;
         } else
-        if (instruction & 0b11111000)==0b00101000 { // ADD A,Rn
-            state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0b00000111) as usize] as u8;
-            state.pc+=1;
-        } else
-        if instruction == 0b00100101 { // ADD A,direct
-            state.int_memory[SfrAddr::ACC] += state.int_memory[state.int_memory[state.pc]];
-            state.pc += 2;
-        } else
+            if (instruction & 0b11111000)==0b00101000 { // ADD A,Rn
+		state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0b00000111) as usize] as u8;
+		state.pc+=1;
+            } else
+            if instruction == 0b00100101 { // ADD A,direct
+		state.int_memory[SfrAddr::ACC] += state.int_memory[state.int_memory[state.pc]];
+		state.pc += 2;
+            } else
 	    if (instruction & 0b11111110) == 0b00100110 { // ADD A,@Ri
 		state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0x00000001) as usize] as u8;
 		state.pc += 1;
-	} else
+	    } else
+	    if instruction == 0b00100100 { // ADD A,#data
+		state.pc += 1;
+		state.int_memory[SfrAddr::ACC] += state.int_memory[state.pc];
+	    } else
+	    if (instruction & 0b11111000) == 0b00111000 { // ADDC A,RN
+		state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0b00000111) as usize] as u8 + state.carry();
+		state.pc+=1;
+            } else
+            if instruction == 0b00110101 { // ADDC A,direct
+		state.int_memory[SfrAddr::ACC] += state.int_memory[state.int_memory[state.pc]] + state.carry();
+		state.pc += 2;
+            } else
+	    if (instruction & 0b11111110) == 0b00110110 { // ADDC A,@Ri
+		state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0x00000001) as usize] as u8 + state.carry();
+		state.pc += 1;
+	    } else
+	    if instruction == 0b00110100 { // ADDC A,#data
+		state.pc += 1;
+		state.int_memory[SfrAddr::ACC] += state.int_memory[state.pc]+state.carry();
+	    } else 
         {};
         state.clock_cycle += 1;
         println!("Tick: {}",state.clock_cycle);
