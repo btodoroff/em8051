@@ -1,0 +1,2 @@
+	ADD A, #81
+SPIN:	LJMP SPIN
