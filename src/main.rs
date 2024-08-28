@@ -208,7 +208,7 @@ mod em8051 {
 	    } else
 	    if instruction == 0b00100100 { // ADD A,#data
 		state.pc += 1;
-		state.int_memory[SfrAddr::ACC] += state.int_memory[state.pc];
+		state.int_memory[SfrAddr::ACC] += state.pgm_memory[state.pc as usize];
 	    } else
 	    if (instruction & 0b11111000) == 0b00111000 { // ADDC A,RN
 		state.int_memory[SfrAddr::ACC] += state.cpu_regfile[(instruction & 0b00000111) as usize] as u8 + state.carry();
@@ -224,8 +224,17 @@ mod em8051 {
 	    } else
 	    if instruction == 0b00110100 { // ADDC A,#data
 		state.pc += 1;
-		state.int_memory[SfrAddr::ACC] += state.int_memory[state.pc]+state.carry();
+		state.int_memory[SfrAddr::ACC] += state.pgm_memory[state.pc as usize]+state.carry();
 	    } else 
+	    if (instruction & 0b00011111) == 0b00000001 { // AJMP addr11
+		let addr:u16 = ((((state.pgm_memory[state.pc as usize]&0b11100000)>>5) as u16)<<8)+(state.pgm_memory[(state.pc+1) as usize] as u16);
+		state.pc += 2;
+		state.pc = (state.pc & 0x02ff) + addr;
+	    } else
+	    if (instruction & 0b11111000) == 0b01011000 { // ANL A,Rn
+		state.int_memory[SfrAddr::ACC] = state.int_memory[SfrAddr::ACC] & state.cpu_regfile[(instruction & 0x07) as usize];
+		state.pc += 1;
+	    } else
         {};
         state.clock_cycle += 1;
         println!("Tick: {}",state.clock_cycle);
