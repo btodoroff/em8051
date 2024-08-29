@@ -225,6 +225,7 @@ mod em8051 {
 	    if instruction == 0b00110100 { // ADDC A,#data
 		state.pc += 1;
 		state.int_memory[SfrAddr::ACC] += state.pgm_memory[state.pc as usize]+state.carry();
+		state.pc += 1;
 	    } else 
 	    if (instruction & 0b00011111) == 0b00000001 { // AJMP addr11
 		let addr:u16 = ((((state.pgm_memory[state.pc as usize]&0b11100000)>>5) as u16)<<8)+(state.pgm_memory[(state.pc+1) as usize] as u16);
@@ -233,6 +234,25 @@ mod em8051 {
 	    } else
 	    if (instruction & 0b11111000) == 0b01011000 { // ANL A,Rn
 		state.int_memory[SfrAddr::ACC] = state.int_memory[SfrAddr::ACC] & state.cpu_regfile[(instruction & 0x07) as usize];
+		state.pc += 1;
+	    } else
+	    if instruction == 0b01010101 { // ANL A,direct
+		state.pc += 1;
+		state.int_memory[SfrAddr::ACC] = state.int_memory[SfrAddr::ACC] & state.pgm_memory[state.pc as usize];
+		state.pc += 1;
+	    } else
+	    if (instruction & 0b11111110) == 0b01010110 { // ANL A,@Ri
+		state.int_memory[SfrAddr::ACC] = state.int_memory[SfrAddr::ACC] & state.cpu_regfile[(instruction & 0x00000001) as usize] as u8;
+		state.pc+=1;
+	    } else
+	    if instruction == 0b01010100 { // ANL A,#data
+		state.pc += 1;
+		state.int_memory[SfrAddr::ACC] = state.pgm_memory[state.pc as usize]+state.carry();
+		state.pc += 1;
+	    } else
+	    if instruction == 0b01010010 { // ANL direct,A
+		state.pc += 1;
+		state.int_memory[SfrAddr::ACC] = state.pgm_memory[state.pc as usize] & state.int_memory[SfrAddr::ACC];
 		state.pc += 1;
 	    } else
         {};
