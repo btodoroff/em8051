@@ -160,6 +160,26 @@ mod em8051 {
 		0
 	    }
 	}
+	fn write_carry(&mut self, bit: u8) {
+	    let cval = self.int_memory[SfrAddr::PSW];
+	    if bit == 0 {
+		self.int_memory[SfrAddr::PSW] = cval & 0b10000000;
+	    } else {
+		self.int_memory[SfrAddr::PSW] = cval | 0b10000000;
+	    }
+	}	
+	fn read_bit(&self, bit_addr: u8) -> u8 {
+	    let bit_num:u8 = bit_addr & 0x07;
+	    let mut byte_addr:u8 = bit_addr & 0xf8;
+	    if byte_addr < 0x80 {
+		byte_addr = 0x20 + byte_addr >> 5;
+	    }
+	    if self.int_memory[byte_addr] >> bit_num & 0x01 != 0 {
+		1
+	    } else {
+		0
+	    }
+	}
     }
 
     // Similarly, implement `Display` for `Point2D`.
@@ -199,7 +219,7 @@ mod em8051 {
                                     state.run = false;
                                 }
                                 Reset => {
-                                    let mut state = state_mutex.lock().unwrap();
+                                     let mut state = state_mutex.lock().unwrap();
                                     reset(&mut state);
                                 },
                                 PowerOn => {
@@ -312,6 +332,20 @@ mod em8051 {
 		state.int_memory[ACC] = state.pgm_memory[state.pc as usize] & state.int_memory[ACC];
 		state.pc += 1;
 	    } else
+	    if instruction == 0b10000010 { // ANL C,bit
+		state.pc += 1;
+		state.write_carry(state.read_bit(state.pgm_memory[state.pc as usize]));
+		state.pc += 1;
+	    }
+	    if instruction == 0b10110010 { // ANL C,/bit
+		state.pc += 1;
+		if state.read_bit(state.pgm_memory[state.pc as usize]) == 0 {
+		    state.write_carry(1);
+		} else {
+		    state.write_carry(0);
+		}
+		state.pc += 1;
+	    }
         {};
         state.clock_cycle += 1;
         println!("Tick: {}",state.clock_cycle);
