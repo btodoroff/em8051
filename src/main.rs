@@ -137,6 +137,7 @@ mod em8051 {
     pub struct State {
         pub run: bool,
         pub pc: u16,
+	pub reg_bank: u8,
         pub cpu_regfile: EmMemory,
         pub pgm_memory: [u8; 16*1024],
         data_memory: [u8; 16*1024],
@@ -182,7 +183,6 @@ mod em8051 {
 	}
     }
 
-    // Similarly, implement `Display` for `Point2D`.
     impl fmt::Display for State {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             // Customize so only `x` and `y` are denoted.
@@ -196,7 +196,8 @@ mod em8051 {
         let state = Arc::new(Mutex::new(State {
             run: false,
             pc: 0,
-            cpu_regfile: EmMemory::new(16),
+	    reg_bank: 0,
+	    cpu_regfile: EmMemory::new(32),
             pgm_memory: [0; 16*1024],
             data_memory: [0; 16*1024],
             int_memory: InternalMemory([0; 256]),
@@ -272,7 +273,7 @@ mod em8051 {
             state.pc += state.pgm_memory[(state.pc-1) as usize] as u16;
         } else
             if (instruction & 0b11111000)==0b00101000 { // ADD A,Rn
-		state.int_memory[ACC] += state.cpu_regfile[instruction & 0b00000111];
+		state.int_memory[ACC] += state.cpu_regfile[instruction & 0b00000111 + state.reg_bank*8];
 		state.pc+=1;
             } else
             if instruction == 0b00100101 { // ADD A,direct
@@ -280,15 +281,15 @@ mod em8051 {
 		state.pc += 2;
             } else
 	    if (instruction & 0b11111110) == 0b00100110 { // ADD A,@Ri
-		state.int_memory[ACC] += state.cpu_regfile[instruction & 0x00000001];
+		state.int_memory[ACC] += state.cpu_regfile[instruction & 0x00000001 + state.reg_bank*8];
 		state.pc += 1;
 	    } else
 	    if instruction == 0b00100100 { // ADD A,#data
 		state.pc += 1;
 		state.int_memory[ACC] += state.pgm_memory[state.pc as usize];
 	    } else
-	    if (instruction & 0b11111000) == 0b00111000 { // ADDC A,RN
-		state.int_memory[ACC] += state.cpu_regfile[instruction & 0b00000111] as u8 + state.carry();
+	    if (instruction & 0b11111000) == 0b00111000 { // ADDC A,Rn
+		state.int_memory[ACC] += state.cpu_regfile[instruction & 0b00000111 + state.reg_bank*8] as u8 + state.carry();
 		state.pc+=1;
             } else
             if instruction == 0b00110101 { // ADDC A,direct
@@ -296,7 +297,7 @@ mod em8051 {
 		state.pc += 2;
             } else
 	    if (instruction & 0b11111110) == 0b00110110 { // ADDC A,@Ri
-		state.int_memory[ACC] += state.cpu_regfile[instruction & 0x00000001] as u8 + state.carry();
+		state.int_memory[ACC] += state.cpu_regfile[instruction & 0x00000001 + state.reg_bank*8] as u8 + state.carry();
 		state.pc += 1;
 	    } else
 	    if instruction == 0b00110100 { // ADDC A,#data
@@ -310,7 +311,7 @@ mod em8051 {
 		state.pc = (state.pc & 0x02ff) + addr;
 	    } else
 	    if (instruction & 0b11111000) == 0b01011000 { // ANL A,Rn
-		state.int_memory[ACC] = state.int_memory[ACC] & state.cpu_regfile[instruction & 0x07];
+		state.int_memory[ACC] = state.int_memory[ACC] & state.cpu_regfile[instruction & 0x07 + state.reg_bank*8];
 		state.pc += 1;
 	    } else
 	    if instruction == 0b01010101 { // ANL A,direct
@@ -319,7 +320,7 @@ mod em8051 {
 		state.pc += 1;
 	    } else
 	    if (instruction & 0b11111110) == 0b01010110 { // ANL A,@Ri
-		state.int_memory[ACC] = state.int_memory[ACC] & state.cpu_regfile[instruction & 0x00000001];
+		state.int_memory[ACC] = state.int_memory[ACC] & state.cpu_regfile[instruction & 0x00000001 + state.reg_bank*8];
 		state.pc+=1;
 	    } else
 	    if instruction == 0b01010100 { // ANL A,#data
@@ -336,7 +337,7 @@ mod em8051 {
 		state.pc += 1;
 		state.write_carry(state.read_bit(state.pgm_memory[state.pc as usize]));
 		state.pc += 1;
-	    }
+	    } else
 	    if instruction == 0b10110010 { // ANL C,/bit
 		state.pc += 1;
 		if state.read_bit(state.pgm_memory[state.pc as usize]) == 0 {
@@ -345,8 +346,23 @@ mod em8051 {
 		    state.write_carry(0);
 		}
 		state.pc += 1;
-	    }
-        {};
+	    } else
+	    if instruction == 0b10110101 { // CJNE A,direct,rel
+		state.pc += 1;
+		let dir_addr = state.pgm_memory[pc];
+		state.pc += 1;
+		let rel_addr = state.pgm_memory[pc] as i8;
+		state.pc += 1;
+		if state.int_memory[ACC] != state.int_memory[dir_addr] {
+		    state.pc += rel_addr;
+		}
+		if state.int_memory[ACC] < state.int_memory[dir_addr] {
+		    state.write_carry(1);
+		} else {
+		    state.write_carry(0);
+		}
+	    } else
+            {};
         state.clock_cycle += 1;
         println!("Tick: {}",state.clock_cycle);
     }
